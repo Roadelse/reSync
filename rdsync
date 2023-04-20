@@ -71,12 +71,12 @@ if [[ "$mode" =~ put.* ]]; then
     fi
 
     if [[ "$mode" == "put" ]]; then
-        rsync -avP $targetFiles $addr/$rPath
+        rsync -avPL $targetFiles $addr/$rPath
     elif [[ "$mode" == 'put2' ]]; then
         mach_addr=(${addr//:/ })
         mach=${mach_addr[0]}
         ssh $mach "mkdir -p ${mach_addr[1]}/$rPath"
-        rsync -avP $targetFiles $addr/$rPath
+        rsync -avPL $targetFiles $addr/$rPath
     else
         echo "unsupported mode = ${mode}"
         exit 4
@@ -95,7 +95,7 @@ elif [[ "$mode" == 'get' ]]; then
     echo $addr
     echo $rPath
     echo $targetFiles
-    rsync -avP $addr/$rPath/$targetFiles .
+    rsync -avPL $addr/$rPath/$targetFiles .
 else
     echo "not supported for $mode yet!"
     exit
