@@ -10,7 +10,8 @@
 configFile=.rdsync_config
 mode=put
 target=any
-while getopts "c:m:t:" arg
+showMode=0
+while getopts "c:m:t:s" arg
 do
     case $arg in 
         c)
@@ -19,6 +20,8 @@ do
             mode=$OPTARG;;
         t)
             target=$OPTARG;;
+        s)
+            showMode=1;;
     esac
 done
 
@@ -37,6 +40,13 @@ if [[ ! -e $tarDir/$configFile ]]; then
     echo "cannot find $configFile in the current and all parent directories! Error"
     exit 2
 fi
+
+if [[ $showMode == 1 ]]; then
+    echo "configFile is found in :"
+    echo $tarDir/$configFile
+    exit 0
+fi
+
 
 
 echo $tarDir/$configFile
