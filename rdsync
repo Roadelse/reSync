@@ -28,7 +28,7 @@ done
 
 tarDir=${PWD}
 rPath=""
-while [[ $tarDir != ~ ]]
+while [[ $tarDir != '/' ]]
 do
     if [[ -e $tarDir/$configFile ]]; then
         break
