@@ -1,0 +1,9 @@
+{
+    "wsl": [
+        "jsync/jsync.sh",
+        "robsys/robs.sh"
+    ],
+    "powershell": [
+        "robsys/robs.ps1"
+    ]
+}
