@@ -7,7 +7,7 @@
 #    ● Pack outdated directories into StaticRecall 
 
 # 2023-12-25    init
-# 2024-01-07    refined
+# 2024-01-08    rebuild, use 1st argument as action, pointing to corresponding functions. Action now supports: sort, restore, pack, show
 
 
 
@@ -26,7 +26,11 @@ param (
     [switch]$error_stop,
     [Alias("v")]
     [switch]$verbose,
-    [string]$restore_op
+    # ... for action:restore
+    [string]$restore_op,
+    # ... for action:show
+    [string]$goto,
+    [switch]$open
 )
 
 
@@ -53,30 +57,17 @@ $ignore_global = @(".reconf$", ".resync_config$", "resort-error\..*\.log$", "^pr
 ###########################################################
 # kernel functions
 ###########################################################
-# >>>>>>>>>>>>>>>>>>>>>>>>> entry <<<<<<<<<<<<<<<<<<<<<<<<<
-# function main {
-    
-#     if ($mode.ToLower() -eq "sort"){
-#         sort_dir @$PSBoundParameters
-#     }
-
-#     if ($restore_mode) {
-#         restore_dir $target_dir ($restore_move ? "Move" : "Copy")
-#     } elseif ($staticRecall) {
-#         pack2StaticRecall $target_dir
-#     } else {
-#         sort_dir $target_dir
-#     }
-# }
-# <L1> global help function
+# >>>>>>>>>>>>>>>>>>>>> help function <<<<<<<<<<<<<<<<<<<<<
 function show_help {
     param(
         [string]$action
     )
+
+    # ================== show help info. based on action
     if ($action -eq "") {
         Write-Output @"
 [~] Usage
-    robs.ps1 <action> [<target>] [options]
+    robs.ps1 <action> [target] [options]
 
 Supported actions:
     ● sort      robs.ps1 sort -h|--help
@@ -92,8 +83,57 @@ Global options:
 "@
     } elseif ($action -eq "sort") {
         Write-Output @"
-        [~] Usage
-            robs.ps1 sort [<target>] [options]
+robs.ps1 for action:sort, aims to sort file & directories among r.o.b.s. To be specific, based on local Roadelse/ (r.), move suitable items to OneDrive/BaiduSync and link them back, or directly link back in a new host.
+
+[~] Usage
+    robs.ps1 sort [target] [options]
+
+[target]    any directory or file:.reconf within r.o.b.s. projects. use "." if not specified
+[options]
+    ● -h | -help
+        Show the hepl info. for action:sort
+"@
+    } elseif ($action -eq "restore") {
+        Write-Output @"
+robs.ps1 for action:restore, aims to gather all items from Onedrive/Baidusync, via "move" or "copy"
+
+[~] Usage
+    robs.ps1 restore [target] [options]
+
+[target]    any directory or file:.reconf within r.o.b.s. projects. use "." if not specified
+[options]
+    ● -h | -help
+        Show the hepl info. for action:restore
+    ● -op | -restore_op, default("Move"), validateSet("Move", "Copy")
+        Choose transfer operation
+"@
+    } elseif ($action -eq "pack") {
+        Write-Output @"
+robs.ps1 for action:pack, aims to package target dir and move it to StaticRecall
+
+[~] Usage
+    robs.ps1 pack [target] [options]
+
+[target]    any directory or file:.reconf within r.o.b.s. projects. use "." if not specified
+[options]
+    ● -h | -help
+        Show the hepl info. for action:restore
+"@
+    } elseif ($action -eq "show") {
+        Write-Output @"
+robs.ps1 for action:show, aims to show correspoinding robs paths and provide relative operations
+
+[~] Usage
+    robs.ps1 show [target] [options]
+
+[target]    any directory or file:.reconf within r.o.b.s. projects. use "." if not specified
+[options]
+    ● -h | -help
+        Show the hepl info. for action:restore
+    ● -goto, combine(r,o,b,s,a)
+        go to target path in shell, detecting the 1st valid char
+    ● -open
+        if set to $true, -goto will open file explorers for all valid (r,o,b,s,a) paths
 "@
     } else {
         Write-Error "Should Never be displayed!" -ErrorAction Stop
@@ -101,67 +141,146 @@ Global options:
 }
 
 
-function norm_path{
+# >>>>>>>>>>>> normalize target path and check <<<<<<<<<<<<
+function norm_path {
     param(
         [string]$target,
         [ValidateSet("skip", "mkdir", "stop")]
-        [string]$no_exist_action="mkdir"
+        [string]$no_exist_action = "mkdir"
     )
 
-# ================== set $pwd as default target if not specified
-if ($target -eq "") {
-    $target = "."
-}
-
-
-# ================== get target directory path
-$target = [IO.Path]::GetFullPath($target, $pwd.ProviderPath)
-
-if (Test-Path $target){
-    if ((Get-Item $target).PSIsContainer) { #>- pass for directory
-        # pass
-    } elseif ((Get-Item $target).Name -eq ".reconf") {  #>- get directory path for .reconf
-        $target = (Get-Item $target).DirectoryName
-    } else { #>- error for file not being .reconf
-        Write-Error "If a file is given, is must be a .reconf file!" -ErrorAction Stop
+    # ================== set $pwd as default target if not specified
+    if ($target -eq "") {
+        $target = "."
     }
+
+
+    # ================== get target directory path
+    $target = [IO.Path]::GetFullPath($target, $pwd.ProviderPath)
+
+    if (Test-Path $target) {
+        if ((Get-Item $target).PSIsContainer) { #>- pass for directory
+            # pass
+        } elseif ((Get-Item $target).Name -eq ".reconf") { #>- get directory path for .reconf
+            $target = (Get-Item $target).DirectoryName
+        } else { #>- error for file not being .reconf
+            Write-Error "If a file is given, is must be a .reconf file!" -ErrorAction Stop
+        }
+    }
+
+    # ================== convert all obs path to roadelse path, i.e., local path
+    if ($target.StartsWith($rrO)) {
+        $rpath = $target.Replace($rrO, $rrR)
+        $opath = $target
+        $bpath = $target.Replace($rrO, $rrB)
+        $spath = $target.Replace($rrO, $rrS)
+    } elseif ($target.StartsWith($rrB)) {
+        $rpath = $target.Replace($rrB, $rrR)
+        $opath = $target.Replace($rrB, $rrO)
+        $bpath = $target
+        $spath = $target.Replace($rrB, $rrS)
+    } elseif ($target.StartsWith($rrS)) {
+        $rpath = $target.Replace($rrS, $rrR)
+        $opath = $target.Replace($rrS, $rrO)
+        $bpath = $target.Replace($rrS, $rrB)
+        $spath = $target
+    } elseif ($target.StartsWith($rrR)) {
+        $rpath = $target
+        $opath = $target.Replace($rrR, $rrO)
+        $bpath = $target.Replace($rrR, $rrB)
+        $spath = $target.Replace($rrR, $rrS)
+    } else { #>- Error if not within r.o.b.s. system
+        Write-Error "Path not in r.o.b.s. system! $target" -ErrorAction Stop
+    }
+
+    # ================== check target existence
+    if (-not (Test-Path -Path $rpath)) {
+        if ($no_exist_action -eq "mkdir") {
+            New-Item -ItemType Directory $rpath -Force
+        } elseif ($no_exist_action -eq "stop") {
+            Write-Error "target path doesn't exist!" -ErrorAction Stop
+        } 
+    }
+
+    return $rpath, $opath, $bpath, $spath
 }
 
-# ================== convert all obs path to roadelse path, i.e., local path
-if ($target.StartsWith($rrO)) {
-    $rpath = $target.Replace($rrO, $rrR)
-    $opath = $target
-    $bpath = $target.Replace($rrO, $rrB)
-    $spath = $target.Replace($rrO, $rrS)
-} elseif ($target.StartsWith($rrB)) {
-    $rpath = $target.Replace($rrB, $rrR)
-    $opath = $target.Replace($rrB, $rrO)
-    $bpath = $target
-    $spath = $target.Replace($rrB, $rrS)
-} elseif ($target.StartsWith($rrS)) {
-    $rpath = $target.Replace($rrS, $rrR)
-    $opath = $target.Replace($rrS, $rrO)
-    $bpath = $target.Replace($rrS, $rrB)
-    $spath = $target
-} elseif ($target.StartsWith($rrR)) {
-    $rpath = $target
-    $opath = $target.Replace($rrR, $rrO)
-    $bpath = $target.Replace($rrR, $rrB)
-    $spath = $target.Replace($rrR, $rrS)
-} else {  #>- Error if not within r.o.b.s. system
-    Write-Error "Path not in r.o.b.s. system! $target" -ErrorAction Stop
-}
 
-# ================== check target existence
-if (-not (Test-Path -Path $rpath)) {
-    if ($no_exist_action -eq "mkdir"){
-        New-Item -ItemType Directory $rpath -Force
-    } elseif ($no_exist_action -eq "stop"){
-        Write-Error "target path doesn't exist!" -ErrorAction Stop
-    } 
-}
+# >>>>>>>>>>>>>>>>> show & operate paths <<<<<<<<<<<<<<<<<<
+function show_robs {
+    param(
+        $target,
+        [Alias("h")]
+        [switch]$help,
+        [string]$goto,
+        [switch]$open,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        $_arg_holders
+    )
 
-    return $rpath, $opath, $bpath, $opath
+    [void]$_arg_holders  #>- avoid unused variable hint in editor
+
+    if ($help) {
+        show_help -action show
+        return
+    }
+
+    $rpath, $opath, $bpath, $spath = norm_path $target
+
+    # ================== render √ and × char with ANSI color code
+    function checkE {
+        param(
+            [string]$p
+        )
+        if (Test-Path $p) {
+            return "`e[32m√`e[0m"
+        } else {
+            return "`e[31m×`e[0m"
+        }
+    }
+
+    # ================== print paths
+    Write-Host @"
+Roadelse    `t($(checkE $rpath)) : $rpath
+OneDrive    `t($(checkE $opath)) : $opath
+BaiduSync   `t($(checkE $bpath)) : $bpath
+StaticRecall`t($(checkE $spath)) : $spath
+"@
+
+    # ================== handle $goto param
+    if ($goto) {
+        [System.Collections.ArrayList]$dirs2go = @()
+        if ($goto -match "a") {
+            $dirs2go = $rpath, $opath, $bpath, $spath
+        } else {
+            if ($goto -match "r") {
+                $dirs2go.Add($rpath) > $null
+            }
+            if ($goto -match "o") {
+                $dirs2go.Add($opath) > $null
+            }
+            if ($goto -match "b") {
+                $dirs2go.Add($bpath) > $null
+            }
+            if ($goto -match "s") {
+                $dirs2go.Add($spath) > $null
+            }
+        }
+        # Write-Output $dirs2go
+
+        if ($goto.Count -eq 0) {
+            Write-Error "Error! param:`$goto doesn't contain any of r, o, b, s, a" -ErrorAction Stop
+        }
+        
+        # ~~~~~~~~~~ if $open, open the file explorer
+        if ($open) {
+            $dirs2go | ForEach-Object {
+                Invoke-Item $_
+            } 
+        } else { #>- or just cd
+            Set-Location $dirs2go[0]
+        }
+    }
 }
 
 
@@ -184,9 +303,11 @@ function sort_dir {
         $_arg_holders
     )
 
+    [void]$_arg_holders  #>- avoid unused variable hint in editor
+
     # Write-Output "Enter sort_dir $wdir"
 
-    if ($help){
+    if ($help) {
         show_help -action sort
         return
     }
@@ -196,10 +317,10 @@ function sort_dir {
     $rpath, $opath, $bpath, $spath = norm_path $target
     # $wdir = Get-Item $robs_path[0]
     # if ($wdir -is [string]) {
-        # if (-not(Test-Path $wdir)) { #>- for conditions that building local links in a new PC
-            # New-Item -ItemType Directory $wdir -Force
-        # }
-        # $wdir = Get-Item $wdir;
+    # if (-not(Test-Path $wdir)) { #>- for conditions that building local links in a new PC
+    # New-Item -ItemType Directory $wdir -Force
+    # }
+    # $wdir = Get-Item $wdir;
     # }
 
     # $opath = l2o $wdir.FullName
@@ -261,7 +382,7 @@ function sort_dir {
         if ($_.PSIsContainer) {
             sort_dir -target $_ -rcf (deepcopy $rcf)
 
-        # ~~~~~~~~~~ Do the operation in default rules
+            # ~~~~~~~~~~ Do the operation in default rules
         } else {
             $fsize = $_.Length / 1MB; # file size in MB
             if ($fsize -lt 5) {
@@ -362,36 +483,6 @@ function move_and_link([object]$src, [string]$dst) {
 }
 
 
-# >>>>>>>>>>>>>>>>>>>> pack dir to SR <<<<<<<<<<<<<<<<<<<<<
-function pack2StaticRecall {
-    # ================== param resolve
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$target
-    )
-
-    # ================== pre-processing
-    $rpath, $opath, $bpath, $spath = norm_path $target -no_exist_action stop
-
-    Assert ((Get-Item $rpath).PSIsContainer) "Path is not a directory! $rpath"
-
-    $sr_path = ($rpath + ".zip").Replace($rrR, $rrS)
-
-    restore_dir $rpath -mc "Move"
-
-    if ($echo_only) {
-        Write-Output "compress & delete, move .zip to StaticRecall"
-        return
-    }
-
-    # ================== do the operation
-    Compress-Archive -Path $rpath -DestinationPath ($rpath + ".zip") -CompressionLevel Fastest
-    Remove-Item $rpath -Recurse -Force
-    New-Item -ItemType Directory -Path (Split-Path $sr_path) -Force
-    Move-Item -Path ($rpath + ".zip") -Destination $sr_path
-}
-
-
 # >>>>>>>>>>>>>>> gather files back to <r.> <<<<<<<<<<<<<<<
 function restore_dir {
     # ================== param resolve
@@ -399,8 +490,20 @@ function restore_dir {
     param (
         [string]$target,
         [ValidateSet("Move", "Copy")] #>- case-insensitive by default , "move", "copy", "MOVE", "copy")]
-        [string]$restore_op = "Copy"
+        [Alias("op")]
+        [string]$restore_op = "Copy",
+        [Alias("h")]
+        [switch]$help,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        $_arg_holders
     )
+
+    [void]$_arg_holders  #>- avoid unused variable hint in editor
+
+    if ($help) {
+        show_help pack
+        return
+    }
 
     # ================== pre-processing
     $rpath, $opath, $bpath, $spath = norm_path $target
@@ -455,6 +558,49 @@ function restore_dir {
 }
 
 
+# >>>>>>>>>>>>>>>>>>>> pack dir to SR <<<<<<<<<<<<<<<<<<<<<
+function pack2StaticRecall {
+    # ================== param resolve
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$target,
+        [Alias("h")]
+        [switch]$help,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        $_arg_holders
+    )
+
+    [void]$_arg_holders  #>- avoid unused variable hint in editor
+
+    if ($help) {
+        show_help pack
+        return
+    }
+
+    # ================== pre-processing
+    $rpath, $opath, $bpath, $spath = norm_path $target -no_exist_action stop
+
+    Assert ((Get-Item $rpath).PSIsContainer) "Path is not a directory! $rpath"
+
+    $sr_path = ($rpath + ".zip").Replace($rrR, $rrS)
+
+    restore_dir $rpath -mc "Move"
+
+    if ($echo_only) {
+        Write-Output "compress & delete, move .zip to StaticRecall"
+        return
+    }
+
+    # ================== do the operation
+    Compress-Archive -Path $rpath -DestinationPath ($rpath + ".zip") -CompressionLevel Fastest
+    Remove-Item $rpath -Recurse -Force
+    New-Item -ItemType Directory -Path (Split-Path $sr_path) -Force
+    Move-Item -Path ($rpath + ".zip") -Destination $sr_path
+}
+
+
+
+
 # >>>>>>>>>>>>>>>> error handler function <<<<<<<<<<<<<<<<<
 function errHandler {
     Param(
@@ -505,15 +651,15 @@ function b2l {
 
 
 ###########################################################
-# Function Caller
+# Function entry
 ###########################################################
-if ($action.ToLower() -eq "sort"){
+if ($action.ToLower() -eq "sort") {
     sort_dir @PSBoundParameters
-} elseif ($action.ToLower() -eq "restore"){
+} elseif ($action.ToLower() -eq "restore") {
     restore_dir @PSBoundParameters
-} elseif ($action.ToLower() -eq "pack"){
+} elseif ($action.ToLower() -eq "pack") {
     pack2StaticRecall @PSBoundParameters
-} elseif ($action.ToLower() -eq "show"){
+} elseif ($action.ToLower() -eq "show") {
     show_robs @PSBoundParameters
 } else {
     show_help
