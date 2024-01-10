@@ -6,7 +6,7 @@
 
 1. **jsync**: project-level sync tool, a wrapper for rsync but using pre-configured hosts & paths to avoid typing explicit paths
 
-2. **robsys**: used to operate files & directories among local directory and corresponding cloud-sync dirs. Fixed for my custom r.o.b.s. distributed project FS
+2. **robsys**: (usage limited) used to operate files & directories among local directory and corresponding cloud-sync dirs (e.g., Onedrive and Baidusync is considered here). Desgined for my custom r.o.b.s. distributed project file structure
 
 ***
 
