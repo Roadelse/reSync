@@ -92,6 +92,7 @@ robs.ps1 for action:sort, aims to sort file & directories among r.o.b.s. To be s
 [options]
     ● -h | -help
         Show the hepl info. for action:sort
+    ● See global options in "robs.ps1 -h"
 "@
     } elseif ($action -eq "restore") {
         Write-Output @"
@@ -106,6 +107,8 @@ robs.ps1 for action:restore, aims to gather all items from Onedrive/Baidusync, v
         Show the hepl info. for action:restore
     ● -op | -restore_op, default("Move"), validateSet("Move", "Copy")
         Choose transfer operation
+    ● See global options in "robs.ps1 -h"
+
 "@
     } elseif ($action -eq "pack") {
         Write-Output @"
@@ -118,6 +121,8 @@ robs.ps1 for action:pack, aims to package target dir and move it to StaticRecall
 [options]
     ● -h | -help
         Show the hepl info. for action:restore
+    ● See global options in "robs.ps1 -h"
+
 "@
     } elseif ($action -eq "show") {
         Write-Output @"
@@ -134,6 +139,8 @@ robs.ps1 for action:show, aims to show correspoinding robs paths and provide rel
         go to target path in shell, detecting the 1st valid char
     ● -open
         if set to $true, -goto will open file explorers for all valid (r,o,b,s,a) paths
+    ● See global options in "robs.ps1 -h"
+
 "@
     } else {
         Write-Error "Should Never be displayed!" -ErrorAction Stop
@@ -323,11 +330,14 @@ function sort_dir {
     # $wdir = Get-Item $wdir;
     # }
 
-    # $opath = l2o $wdir.FullName
-    # $bpath = l2b $wdir.FullName
+    # $opath = r2o $wdir.FullName
+    # $bpath = r2b $wdir.FullName
 
     # ~~~~~~~~~~ load .reconf if existed
     if (Test-Path "${rpath}\.reconf") {
+        if (-not ((Get-Item "${rpath}\.reconf").Attributes -match "ReparsePoint")) { #>- added @2024-01-11
+            move_and_link (Get-Item "${rpath}\.reconf") $opath\.reconf
+        }
         Update-Hashtable $rcf (Get-Content "${rpath}\.reconf" | ConvertFrom-Json -AsHashtable)
     }
     
@@ -337,7 +347,7 @@ function sort_dir {
     }
 
     # ~~~~~~~~~~ remark current target in global
-    $sorted_dirs.Add($rpath.FullName.Replace($rrR + "\", "")) | Out-Null
+    $sorted_dirs.Add($rpath.Replace($rrR + "\", "")) | Out-Null
 
     # ================== handle children items one by one
     Get-ChildItem $rpath | 
@@ -362,19 +372,36 @@ function sort_dir {
 
         # ~~~~~~~~~~ Do the operation via manually set rule
         if ($rcf.Contains('OneDrive') -and $rcf.OneDrive.Contains($_.Name)) {
-            move_and_link $_ $_.FullName.Replace($rrR, $rrO)
+            move_and_link $_ (r2o $_.FullName)
             return
         } elseif ($rcf.Contains('Baidusync') -and $rcf.Baidusync.Contains($_.Name)) {
-            move_and_link $_ $_.FullName.Replace($rrR, $rrB)
+            move_and_link $_ (r2b $_.FullName)
             return
         }
 
         # ~~~~~~~~~~ Do the operation via name prefix rule
         if ($_.Name.StartsWith("O..")) {
-            move_and_link $_ $_.FullName.Replace($rrR, $rrO)
+            Write-Output "`e[33mRename`e[0m $($_.Name), following move_and_link would use original name"
+            $newName = $_.Name.Replace("O..", "")
+            $newPath = (Split-Path $_) + "\$newName"
+            $ftemp = $_
+            # Write-Output newPath=$newPath
+            if (-not $echo_only) {
+                Rename-Item $_.FullName -NewName $newName
+                $ftemp = Get-Item $newPath
+            }
+            move_and_link $ftemp (r2o $newPath)
             return
         } elseif ($_.Name.StartsWith("B..")) {
-            move_and_link $_ $_.FullName.Replace($rrR, $rrB)
+            Write-Output "`e[33mRename`e[0m $($_.Name), following move_and_link would use original name"
+            $newName = $_.Name.Replace("B..", "")
+            $newPath = $_.DirectoryName + "/$newName"
+            $ftemp = $_
+            if (-not $echo_only) {
+                Rename-Item $_.FullName -NewName $newName
+                $ftemp = Get-Item $newPath
+            }
+            move_and_link $ftemp (r2b $newPath)
             return
         }
 
@@ -397,7 +424,7 @@ function sort_dir {
     # ================== link back items in OneDrive
     if (Test-Path $opath) {
         Get-ChildItem $opath | ForEach-Object -Process {
-            $_lp = o2l $_.FullName  #>- corresponding local path for $_.FullName
+            $_lp = o2r $_.FullName  #>- corresponding local path for $_.FullName
             if (Test-Path $_lp) {
                 # ~~~~~~~~~~ handle shortcut links separately (should only in onedrive!)
                 if ($_lp.EndsWith(".lnk") -and (-not (Test-Path $_lp))) {
@@ -430,7 +457,7 @@ function sort_dir {
     if (Test-Path $bpath) {
         Get-ChildItem $bpath | ForEach-Object -Process {
             Assert (-not $_.FullName.EndsWith(".lnk")) "Shortcut links should not occur in BaiduSync!" #>- ensure no shortcut link
-            $_lp = b2l $_.FullName  #>- corresponding local path for $_.FullName
+            $_lp = b2r $_.FullName  #>- corresponding local path for $_.FullName
             if (Test-Path $_lp) {
                 # ~~~~~~~~~~ handle error conditions
                 $i_lp = Get-Item $_lp
@@ -456,8 +483,20 @@ function sort_dir {
 
 
 # >>>>>>>>>>>>>>>>> execution in sort_dir <<<<<<<<<<<<<<<<<
-function move_and_link([object]$src, [string]$dst) {
-    Write-Output "move_and_link($src, $dst)"
+function move_and_link {
+
+    param(
+        [object]$src,
+        [string]$dst,
+        [string]$linkName
+    )
+
+    if ($linkName -eq "") {
+        $linkName = $src.Name
+    }
+    $linkPath = (Split-Path $src.FullName) + "\$linkName"
+
+    Write-Host "`e[33mmove_and_link`e[0m($src, $dst, $linkName)"
 
     # ================== ensure $dst doesn't exist
     if (Test-Path $dst) {
@@ -477,7 +516,7 @@ function move_and_link([object]$src, [string]$dst) {
 
     # ================== move then link back
     Move-Item -Path $src.FullName -Destination $dst
-    New-Item -ItemType SymbolicLink -Path $src.FullName -Target $dst > $null
+    New-Item -ItemType SymbolicLink -Path $linkPath -Target $dst > $null
     
     # exit 0
 }
@@ -612,7 +651,7 @@ function errHandler {
 
 
 # >>>>>>>>>>>>>>>> path-transfer functions <<<<<<<<<<<<<<<<
-function l2o {
+function r2o {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ldir
@@ -620,7 +659,7 @@ function l2o {
     return $ldir.Replace($rrR, $rrO)
 }
 
-function o2l {
+function o2r {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ldir
@@ -629,7 +668,7 @@ function o2l {
     return $ldir.Replace($rrO, $rrR)
 }
 
-function l2b {
+function r2b {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ldir
@@ -638,7 +677,7 @@ function l2b {
     return $ldir.Replace($rrR, $rrB)
 }
 
-function b2l {
+function b2r {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ldir
