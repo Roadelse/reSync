@@ -78,10 +78,13 @@ Supported actions:
 Global options:
     ● -eo, -echo_only
         Do not do the execution, but only echo the commands
+    ● -v, -verbose
+        Print all detailed messages
     ● -h, -help
         Show the help information for this script
 "@
-    } elseif ($action -eq "sort") {
+    }
+    elseif ($action -eq "sort") {
         Write-Output @"
 robs.ps1 for action:sort, aims to sort file & directories among r.o.b.s. To be specific, based on local Roadelse/ (r.), move suitable items to OneDrive/BaiduSync and link them back, or directly link back in a new host.
 
@@ -94,7 +97,8 @@ robs.ps1 for action:sort, aims to sort file & directories among r.o.b.s. To be s
         Show the hepl info. for action:sort
     ● See global options in "robs.ps1 -h"
 "@
-    } elseif ($action -eq "restore") {
+    }
+    elseif ($action -eq "restore") {
         Write-Output @"
 robs.ps1 for action:restore, aims to gather all items from Onedrive/Baidusync, via "move" or "copy"
 
@@ -110,7 +114,8 @@ robs.ps1 for action:restore, aims to gather all items from Onedrive/Baidusync, v
     ● See global options in "robs.ps1 -h"
 
 "@
-    } elseif ($action -eq "pack") {
+    }
+    elseif ($action -eq "pack") {
         Write-Output @"
 robs.ps1 for action:pack, aims to package target dir and move it to StaticRecall
 
@@ -124,7 +129,8 @@ robs.ps1 for action:pack, aims to package target dir and move it to StaticRecall
     ● See global options in "robs.ps1 -h"
 
 "@
-    } elseif ($action -eq "show") {
+    }
+    elseif ($action -eq "show") {
         Write-Output @"
 robs.ps1 for action:show, aims to show correspoinding robs paths and provide relative operations
 
@@ -142,7 +148,8 @@ robs.ps1 for action:show, aims to show correspoinding robs paths and provide rel
     ● See global options in "robs.ps1 -h"
 
 "@
-    } else {
+    }
+    else {
         Write-Error "Should Never be displayed!" -ErrorAction Stop
     }
 }
@@ -166,11 +173,16 @@ function norm_path {
     $target = [IO.Path]::GetFullPath($target, $pwd.ProviderPath)
 
     if (Test-Path $target) {
-        if ((Get-Item $target).PSIsContainer) { #>- pass for directory
+        if ((Get-Item $target).PSIsContainer) {
+            #>- pass for directory
             # pass
-        } elseif ((Get-Item $target).Name -eq ".reconf") { #>- get directory path for .reconf
+        }
+        elseif ((Get-Item $target).Name -eq ".reconf") {
+            #>- get directory path for .reconf
             $target = (Get-Item $target).DirectoryName
-        } else { #>- error for file not being .reconf
+        }
+        else {
+            #>- error for file not being .reconf
             Write-Error "If a file is given, is must be a .reconf file!" -ErrorAction Stop
         }
     }
@@ -181,22 +193,27 @@ function norm_path {
         $opath = $target
         $bpath = $target.Replace($rrO, $rrB)
         $spath = $target.Replace($rrO, $rrS)
-    } elseif ($target.StartsWith($rrB)) {
+    }
+    elseif ($target.StartsWith($rrB)) {
         $rpath = $target.Replace($rrB, $rrR)
         $opath = $target.Replace($rrB, $rrO)
         $bpath = $target
         $spath = $target.Replace($rrB, $rrS)
-    } elseif ($target.StartsWith($rrS)) {
+    }
+    elseif ($target.StartsWith($rrS)) {
         $rpath = $target.Replace($rrS, $rrR)
         $opath = $target.Replace($rrS, $rrO)
         $bpath = $target.Replace($rrS, $rrB)
         $spath = $target
-    } elseif ($target.StartsWith($rrR)) {
+    }
+    elseif ($target.StartsWith($rrR)) {
         $rpath = $target
         $opath = $target.Replace($rrR, $rrO)
         $bpath = $target.Replace($rrR, $rrB)
         $spath = $target.Replace($rrR, $rrS)
-    } else { #>- Error if not within r.o.b.s. system
+    }
+    else {
+        #>- Error if not within r.o.b.s. system
         Write-Error "Path not in r.o.b.s. system! $target" -ErrorAction Stop
     }
 
@@ -204,7 +221,8 @@ function norm_path {
     if (-not (Test-Path -Path $rpath)) {
         if ($no_exist_action -eq "mkdir") {
             New-Item -ItemType Directory $rpath -Force
-        } elseif ($no_exist_action -eq "stop") {
+        }
+        elseif ($no_exist_action -eq "stop") {
             Write-Error "target path doesn't exist!" -ErrorAction Stop
         } 
     }
@@ -241,7 +259,8 @@ function show_robs {
         )
         if (Test-Path $p) {
             return "`e[32m√`e[0m"
-        } else {
+        }
+        else {
             return "`e[31m×`e[0m"
         }
     }
@@ -259,7 +278,8 @@ StaticRecall`t($(checkE $spath)) : $spath
         [System.Collections.ArrayList]$dirs2go = @()
         if ($goto -match "a") {
             $dirs2go = $rpath, $opath, $bpath, $spath
-        } else {
+        }
+        else {
             if ($goto -match "r") {
                 $dirs2go.Add($rpath) > $null
             }
@@ -284,7 +304,9 @@ StaticRecall`t($(checkE $spath)) : $spath
             $dirs2go | ForEach-Object {
                 Invoke-Item $_
             } 
-        } else { #>- or just cd
+        }
+        else {
+            #>- or just cd
             Set-Location $dirs2go[0]
         }
     }
@@ -335,7 +357,8 @@ function sort_dir {
 
     # ~~~~~~~~~~ load .reconf if existed
     if (Test-Path "${rpath}\.reconf") {
-        if (-not ((Get-Item "${rpath}\.reconf").Attributes -match "ReparsePoint")) { #>- added @2024-01-11
+        if (-not ((Get-Item "${rpath}\.reconf").Attributes -match "ReparsePoint")) {
+            #>- added @2024-01-11
             move_and_link (Get-Item "${rpath}\.reconf") $opath\.reconf
         }
         Update-Hashtable $rcf (Get-Content "${rpath}\.reconf" | ConvertFrom-Json -AsHashtable)
@@ -366,7 +389,8 @@ function sort_dir {
         }
 
         # ~~~~~~~~~~ check ignore list in rcf
-        if ($rcf.Contains('ignore_list') -and $rcf.ignore_list.Contains($_.Name)) { #>- manual ignore
+        if ($rcf.Contains('ignore_list') -and $rcf.ignore_list.Contains($_.Name)) {
+            #>- manual ignore
             return
         }
 
@@ -374,7 +398,8 @@ function sort_dir {
         if ($rcf.Contains('OneDrive') -and $rcf.OneDrive.Contains($_.Name)) {
             move_and_link $_ (r2o $_.FullName)
             return
-        } elseif ($rcf.Contains('Baidusync') -and $rcf.Baidusync.Contains($_.Name)) {
+        }
+        elseif ($rcf.Contains('Baidusync') -and $rcf.Baidusync.Contains($_.Name)) {
             move_and_link $_ (r2b $_.FullName)
             return
         }
@@ -392,7 +417,8 @@ function sort_dir {
             }
             move_and_link $ftemp (r2o $newPath)
             return
-        } elseif ($_.Name.StartsWith("B..")) {
+        }
+        elseif ($_.Name.StartsWith("B..")) {
             Write-Output "`e[33mRename`e[0m $($_.Name), following move_and_link would use original name"
             $newName = $_.Name.Replace("B..", "")
             $newPath = $_.DirectoryName + "/$newName"
@@ -410,11 +436,13 @@ function sort_dir {
             sort_dir -target $_ -rcf (deepcopy $rcf)
 
             # ~~~~~~~~~~ Do the operation in default rules
-        } else {
+        }
+        else {
             $fsize = $_.Length / 1MB; # file size in MB
             if ($fsize -lt 5) {
                 move_and_link $_ $_.FullName.Replace($rrR, $rrO)
-            } elseif ($fsize -lt 200) {
+            }
+            elseif ($fsize -lt 200) {
                 move_and_link $_ $_.FullName.Replace($rrR, $rrB)
             }
         }
@@ -428,7 +456,10 @@ function sort_dir {
             if (Test-Path $_lp) {
                 # ~~~~~~~~~~ handle shortcut links separately (should only in onedrive!)
                 if ($_lp.EndsWith(".lnk") -and (-not (Test-Path $_lp))) {
-                    Copy-Item -Path $_.FullName -Destination $_lp
+                    Write-Host "`e[33mCopy-Item shortcut`e[0m from OneDrive to local Roadelse: $($_.Name)"
+                    if (-not $echo_only) {
+                        Copy-Item -Path $_.FullName -Destination $_lp
+                    }
                     continue
                 }
 
@@ -439,16 +470,18 @@ function sort_dir {
                         if (-not $sorted_dirs.Contains($_lp.Replace($rrR + "\", ""))) {
                             errHandler ("File conflict: " + $_lp.Replace($rrR + "\", ""))
                         }
-                    } else {
+                    }
+                    else {
                         errHandler ("File conflict: " + $_lp.Replace($rrR + "\", ""))
                     }
                 }
-            } else {
+            }
+            else {
                 # ~~~~~~~~~~ do the link operation
-                if ($verbose) {
-                    Write-Output ("link OneDrive item: " + $_lp.Replace($rrR + "\", "") + " to Local")
+                Write-Host ("`e[33mlink`e[0m OneDrive item: " + $_lp.Replace($rrR + "\", "") + " to Local")
+                if (-not $echo_only) {
+                    New-Item -ItemType SymbolicLink -Path $_lp -Target $_.FullName
                 }
-                New-Item -ItemType SymbolicLink -Path $_lp -Target $_.FullName
             }
         }
     }
@@ -466,16 +499,18 @@ function sort_dir {
                         if (-not $sorted_dirs.Contains($_lp.Replace($rrR + "\", ""))) {
                             errHandler ("File conflict: " + $_lp.Replace($rrR + "\", ""))
                         }
-                    } else {
+                    }
+                    else {
                         errHandler ("File conflict: " + $_lp.Replace($rrR + "\", ""))
                     }
                 }
-            } else {
+            }
+            else {
                 # ~~~~~~~~~~ do the link operation
-                if ($verbose) {
-                    Write-Output ("link BaiduSync item: " + $_lp.Replace($rrR + "\", "") + " to Local")
+                Write-Host ("`e[33mlink`e[0m BaiduSync item: " + $_lp.Replace($rrR + "\", "") + " to Local")
+                if (-not $echo_only) {
+                    New-Item -ItemType SymbolicLink -Path $_lp -Target $_.FullName
                 }
-                New-Item -ItemType SymbolicLink -Path $_lp -Target $_.FullName
             }
         }
     }
@@ -563,12 +598,17 @@ function restore_dir {
             Remove-Item $_
             if ($restore_op.ToUpper() -eq "MOVE") {
                 Move-Item -Path $tgt -Destination $_.FullName
-            } else {
+            }
+            else {
                 Copy-Item -Path $tgt -Destination $_.FullName -Recurse
             }
-        } elseif ($_.PSIsContainer) { #>- for directory
+        }
+        elseif ($_.PSIsContainer) {
+            #>- for directory
             restore_dir $_ $restore_op
-        } elseif ($_.Name.EndsWith(".lnk")) { #>- For Shortcut links
+        }
+        elseif ($_.Name.EndsWith(".lnk")) {
+            #>- For Shortcut links
             if ($restore_op.ToUpper() -eq "MOVE") {
                 Remove-Item $_.FullName.Replace($rrR, $rrO)
             }
@@ -580,17 +620,19 @@ function restore_dir {
         $nFilesO = (Get-ChildItem -Path $opath -Recurse -File | Measure-Object).Count
         if ($nFilesO -gt 0) {
             Write-Host "$nFilesO remained in OneDrive: $opath" -ForegroundColor ($restore_move ? "Red" : "Yellow")
-        } else {
+        }
+        else {
             Remove-Item $opath -Recurse -Force
         }
     }
 
     # ================== handle <b.> items one by one
-    if (test-path $bpath) {
+    if (Test-Path $bpath) {
         $nFilesB = (Get-ChildItem -Path $bpath -Recurse -File | Measure-Object).Count
         if ($nFilesB -gt 0) {
             Write-Host "$nFilesO remained in Baidusync: $bpath" -ForegroundColor ($restore_move ? "Red" : "Yellow")
-        } else {
+        }
+        else {
             Remove-Item $bpath -Recurse -Force
         }
     }
@@ -694,12 +736,16 @@ function b2r {
 ###########################################################
 if ($action.ToLower() -eq "sort") {
     sort_dir @PSBoundParameters
-} elseif ($action.ToLower() -eq "restore") {
+}
+elseif ($action.ToLower() -eq "restore") {
     restore_dir @PSBoundParameters
-} elseif ($action.ToLower() -eq "pack") {
+}
+elseif ($action.ToLower() -eq "pack") {
     pack2StaticRecall @PSBoundParameters
-} elseif ($action.ToLower() -eq "show") {
+}
+elseif ($action.ToLower() -eq "show") {
     show_robs @PSBoundParameters
-} else {
+}
+else {
     show_help
 }
