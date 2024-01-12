@@ -51,8 +51,9 @@ mode=put
 target=default
 unittest=0
 echo_only=0
+show_help=0
 # ================== getopts resolution
-while getopts "m:t:ue" arg
+while getopts "m:t:ueh" arg
 do
     case $arg in 
         m)
@@ -63,14 +64,34 @@ do
             unittest=1;;
         e)
             echo_only=1;;
+        h)
+            show_help=1;;
     esac
 done
-# ================== post-processing
+# ================== pre-processing
 if [[ $unittest == 1 && $OPTIND -gt 2 ]]; then
     echo "Error! -u can only be used alone"
 
     exit 200
 fi
+if [[ $show_help == 1 ]]; then
+    echo -e "\
+\033[01;33mjsync\033[0m, a tool for quick rsync, with pre-defined project-level host-path matches.
+Obtained from https://github.com/Roadelse/reSync
+
+[Usage]
+    \033[32mjsync [-m <mode>] [-t <target>] [<options>] [<files>]\033[0m
+
+    \033[32m<files>\033[0m     : files in local path or remote corresponding path. '*' if not specified
+    \033[32m<mode>\033[0m      : (get, put)
+    \033[32m<target>\033[0m    : heading name in the top-nearest .jsyncrc file
+    \033[32m<options>\033[0m
+        \033[32m-e\033[0m          : echo_only, do not execute final commands, just echo them
+        \033[32m-u <host>\033[0m   : unittest, including local test and remote test (if host passed)
+"
+    exit 0
+fi
+
 # ~~~~~~~~~~ adjust arg index
 shift $((OPTIND-1))
 
