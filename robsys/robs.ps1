@@ -41,7 +41,7 @@ Import-Module rdee
 # >>>>>>>>>>>>>>>>>>> global variables <<<<<<<<<<<<<<<<<<<<
 # ================== r.o.b.s. root paths
 $rrR = "D:\recRoot\Roadelse"
-$rrO = "C:\Users\${env:UserName}\OneDrive\recRoot\Roadelse"
+$rrO = "${env:USERPROFILE}\OneDrive\recRoot\Roadelse"
 $rrB = "D:\BaiduSyncdisk\recRoot\Roadelse"
 $rrS = "D:\recRoot\StaticRecall"
 
