@@ -688,7 +688,7 @@ function errHandler {
         [Parameter(Mandatory = $true)]
         [string]$errmsg
     )
-    Write-Error "Error: $errmsg" ($error_stop ? (-ErrorAction Stop) : (-ErrorAction continue))
+    Write-Error "Error: $errmsg" -ErrorAction ($error_stop ? "Stop" : "continue")
 }
 
 
