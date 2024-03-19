@@ -70,10 +70,11 @@ function show_help {
     robs.ps1 <action> [target] [options]
 
 Supported actions:
-    ● sort      robs.ps1 sort -h|--help
-    ● restore   robs.ps1 restore -h|--help
-    ● pack      robs.ps1 pack -h|--help
-    ● show      robs.ps1 pack -h|--help
+    ● sort      robs.ps1 sort -h
+    ● restore   robs.ps1 restore -h
+    ● pack      robs.ps1 pack -h
+    ● show      robs.ps1 pack -h
+    ● rename    robs.ps1 rename -h
 
 Global options:
     ● -eo, -echo_only
@@ -149,6 +150,22 @@ robs.ps1 for action:show, aims to show correspoinding robs paths and provide rel
 
 "@
     }
+    elseif ($action -eq "rename") {
+        Write-Output @"
+robs.ps1 for action:rename, aims to rename file and its symlinks simultaneously
+
+[~] Usage
+    robs.ps1 rename <target> <newname> [options]
+
+<target>    any existed directory or file
+<newname>   new name
+[options]
+    ● -h | -help
+        Show the hepl info. for action:restore
+    ● See global options in "robs.ps1 -h"
+
+"@
+    }
     else {
         Write-Error "Should Never be displayed!" -ErrorAction Stop
     }
@@ -217,7 +234,7 @@ function norm_path {
         Write-Error "Path not in r.o.b.s. system! $target" -ErrorAction Stop
     }
 
-    # ================== check target existence
+    # ================== check target existence || !! Need rebuld for conditions that file only lie in o.sys
     if (-not (Test-Path -Path $rpath)) {
         if ($no_exist_action -eq "mkdir") {
             New-Item -ItemType Directory $rpath -Force
@@ -680,6 +697,88 @@ function pack2StaticRecall {
 }
 
 
+function rename {
+    #@ prepare
+    param(
+        [string]$target,
+        [string]$newname,
+        [Alias("h")]
+        [switch]$help,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        $_arg_holders
+    )
+
+    
+    [void]$_arg_holders  #>- avoid unused variable hint in editor
+
+    if ($help) {
+        show_help rename
+        return
+    }
+
+    # ================== pre-processing
+    $rpath, $opath, $bpath, $spath = norm_path $target
+
+    if ($echo_only) {
+        Write-Output "restore_dir($rpath, $restore_op)"
+        return
+    }
+
+    #@ main
+    if (Test-Path $opath) {
+        if ((Get-Item "${opath}").Attributes -match "ReparsePoint") {
+            Write-Error "opath cannot denote to a symlink file!" -ErrorAction Stop
+        }
+        Write-Output "`e[33mRename`e[0m $target to $newname in Onedrive"
+        if (-not $echo_only) {
+            Rename-Item -Path $opath -NewName $newname
+        }
+        if (Test-Path $rpath) {
+            if (-not((Get-Item "${opath}").Attributes -match "ReparsePoint")) {
+                Write-Error "rpath should be a symlink file if opath existed!" -ErrorAction Stop
+            }
+            
+            $opath_new = $opath.Substring(0, $opath.Length - $target.Length) + $newname
+            $rpath_new = $rpath.Substring(0, $rpath.Length - $target.Length) + $newname
+            Write-Output "`e[33mre-link`e[0m symlink in r.sys due to rename"
+            if (-not $echo_only) {
+                Remove-Item $rpath
+                New-Item -ItemType SymbolicLink -Path $rpath_new -Target $opath_new -Force > $null
+            }
+        }
+    }
+    elseif (Test-Path $bpath) {
+        if ((Get-Item "${bpath}").Attributes -match "ReparsePoint") {
+            Write-Error "bpath cannot denote to a symlink file!" -ErrorAction Stop
+        }
+        Write-Output "`e[33mRename`e[0m $target to $newname in Onedrive"
+        if (-not $echo_only) {
+            Rename-Item -Path $bpath -NewName $newname
+        }
+        if (Test-Path $rpath) {
+            if (-not((Get-Item "${bpath}").Attributes -match "ReparsePoint")) {
+                Write-Error "rpath should be a symlink file if bpath existed!" -ErrorAction Stop
+            }
+            
+            $bpath_new = $bpath.Substring(0, $bpath.Length - $target.Length) + $newname
+            $rpath_new = $rpath.Substring(0, $rpath.Length - $target.Length) + $newname
+            Write-Output "`e[33mre-link`e[0m symlink in r.sys due to rename"
+            if (-not $echo_only) {
+                Remove-Item $rpath
+                New-Item -ItemType SymbolicLink -Path $rpath_new -Target $bpath_new -Force > $null
+            }
+        }
+    }
+    elseif (Test-Path $rptah) {
+        Write-Output "`e[33mre-link`e[0m symlink in r.sys due to rename"
+        if (-not $echo_only) {
+            Rename-Item -Path $rpath -NewName $newname
+        }
+    }
+    else {
+        Write-Error "$target doesn't exist in current directory for any of r/o/b system" -ErrorAction Stop
+    }
+}
 
 
 # >>>>>>>>>>>>>>>> error handler function <<<<<<<<<<<<<<<<<
@@ -745,6 +844,10 @@ elseif ($action.ToLower() -eq "pack") {
 }
 elseif ($action.ToLower() -eq "show") {
     show_robs @PSBoundParameters
+}
+elseif ($action.ToLower() -eq "rename") {
+    Write-Host $PSBoundParameters
+    rename @PSBoundParameters
 }
 else {
     show_help
