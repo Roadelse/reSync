@@ -72,7 +72,7 @@ mkdir -p $binary_dir && cd $_
 ln -sf `realpath $myDir/../jsync/jsync.sh` jsync
 
 # <..robs>
-ln -sf `realpath $myDir/../robsys/robs.sh` robs
+# ln -sf `realpath $myDir/../robsys/robs.sh` robs
 
 
 # <.setenv>
